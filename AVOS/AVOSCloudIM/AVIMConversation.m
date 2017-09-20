@@ -24,7 +24,7 @@
 #import "AVIMUserOptions.h"
 #import "AVIMErrorUtil.h"
 #import "LCIMConversationCache.h"
-#import "MessagesProtoOrig.pbobjc.h"
+#import "MessagesProtoOrig.pb.h"
 #import "AVUtils.h"
 #import "AVIMRuntimeHelper.h"
 #import "AVIMRecalledMessage.h"
@@ -412,18 +412,18 @@ static dispatch_queue_t messageCacheOperationQueue;
 
 - (void)fetchReceiptTimestampsInBackground {
     dispatch_async([AVIMClient imClientQueue], ^{
-        AVIMGenericCommand *genericCommand = [[AVIMGenericCommand alloc] init];
+        AVIMGenericCommandBuilder *genericCommandBuilder = [AVIMGenericCommand builder];
+        genericCommandBuilder.cmd = AVIMCommandTypeConv;
+        genericCommandBuilder.op = AVIMOpTypeMaxRead;
+        genericCommandBuilder.peerId = self.imClient.clientId;
+        
+        AVIMConvCommandBuilder *convCommandBuilder = [AVIMConvCommand builder];
+        convCommandBuilder.cid = self.conversationId;
 
-        genericCommand.cmd = AVIMCommandType_Conv;
-        genericCommand.op = AVIMOpType_MaxRead;
-        genericCommand.peerId = self.imClient.clientId;
+        genericCommandBuilder.convMessage = [convCommandBuilder build];
+        
+        AVIMGenericCommand *genericCommand = [genericCommandBuilder build];
         genericCommand.needResponse = YES;
-
-        AVIMConvCommand *convCommand = [[AVIMConvCommand alloc] init];
-        convCommand.cid = self.conversationId;
-
-        genericCommand.convMessage = convCommand;
-
         [genericCommand setCallback:^(AVIMGenericCommand *outCommand, AVIMGenericCommand *inCommand, NSError *error) {
             if (error)
                 return;
@@ -452,28 +452,33 @@ static dispatch_queue_t messageCacheOperationQueue;
 - (void)addMembersWithClientIds:(NSArray *)clientIds callback:(AVIMBooleanResultBlock)callback {
     [[AVIMClient class] _assertClientIdsIsValid:clientIds];
     dispatch_async([AVIMClient imClientQueue], ^{
-        AVIMGenericCommand *genericCommand = [[AVIMGenericCommand alloc] init];
-        genericCommand.needResponse = YES;
-        genericCommand.cmd = AVIMCommandType_Conv;
-        genericCommand.peerId = _imClient.clientId;
-        genericCommand.op = AVIMOpType_Add;
+        AVIMGenericCommandBuilder *genericCommandBuilder = [AVIMGenericCommand builder];
+        genericCommandBuilder.cmd = AVIMCommandTypeConv;
+        genericCommandBuilder.peerId = _imClient.clientId;
+        genericCommandBuilder.op = AVIMOpTypeAdd;
         
-        AVIMConvCommand *command = [[AVIMConvCommand alloc] init];
-        command.cid = self.conversationId;
-        command.mArray = [NSMutableArray arrayWithArray:clientIds];
+        AVIMConvCommandBuilder *convCommandBuilder = [AVIMConvCommand builder];
+        convCommandBuilder.cid = self.conversationId;
+        convCommandBuilder.mArray = [NSMutableArray arrayWithArray:clientIds];
+        
+        AVIMConvCommand *command = [convCommandBuilder build];
+        AVIMGenericCommand *genericCommand = [genericCommandBuilder build];
         NSString  *actionString = [AVIMCommandFormatter signatureActionForKey:genericCommand.op];
         NSString *clientIdString = [NSString stringWithFormat:@"%@",genericCommand.peerId];
-        NSArray *clientIds = [command.mArray copy];
+        NSArray *clientIds = [command.m copy];
         AVIMSignature *signature = [_imClient signatureWithClientId:clientIdString conversationId:command.cid action:actionString actionOnClientIds:clientIds];
-        [genericCommand avim_addRequiredKeyWithCommand:command];
-        [genericCommand avim_addRequiredKeyForConvMessageWithSignature:signature];
+        
+        
+        genericCommand = [genericCommand avim_addRequiredKeyWithCommand:(AVIMMessage *)command];
+        genericCommand = [genericCommand avim_addRequiredKeyForConvMessageWithSignature:signature];
+        genericCommand.needResponse = YES;
         if ([AVIMClient checkErrorForSignature:signature command:genericCommand]) {
             return;
         }
         [genericCommand setCallback:^(AVIMGenericCommand *outCommand, AVIMGenericCommand *inCommand, NSError *error) {
             if (!error) {
                 AVIMConvCommand *conversationOutCommand = outCommand.convMessage;
-                [self addMembers:[conversationOutCommand.mArray copy]];
+                [self addMembers:[conversationOutCommand.m copy]];
                 [self removeCachedConversation];
                 [AVIMBlockHelper callBooleanResultBlock:callback error:nil];
             } else {
@@ -495,29 +500,32 @@ static dispatch_queue_t messageCacheOperationQueue;
     
     [[AVIMClient class] _assertClientIdsIsValid:clientIds];
     dispatch_async([AVIMClient imClientQueue], ^{
-        AVIMGenericCommand *genericCommand = [[AVIMGenericCommand alloc] init];
-        genericCommand.needResponse = YES;
-        genericCommand.cmd = AVIMCommandType_Conv;
-        genericCommand.peerId = _imClient.clientId;
-        genericCommand.op = AVIMOpType_Remove;
+        AVIMGenericCommandBuilder *genericCommandBuilder = [AVIMGenericCommand builder];
+        genericCommandBuilder.cmd = AVIMCommandTypeConv;
+        genericCommandBuilder.peerId = _imClient.clientId;
+        genericCommandBuilder.op = AVIMOpTypeRemove;
         
-        AVIMConvCommand *command = [[AVIMConvCommand alloc] init];
-        command.cid = self.conversationId;
-        command.mArray = [NSMutableArray arrayWithArray:clientIds];
+        AVIMConvCommandBuilder *convCommandBuilder = [AVIMConvCommand builder];
+        convCommandBuilder.cid = self.conversationId;
+        convCommandBuilder.mArray = [NSMutableArray arrayWithArray:clientIds];
+        
+        AVIMConvCommand *command = [convCommandBuilder build];
+        AVIMGenericCommand *genericCommand = [genericCommandBuilder build];
         NSString *actionString = [AVIMCommandFormatter signatureActionForKey:genericCommand.op];
         NSString *clientIdString = [NSString stringWithFormat:@"%@",genericCommand.peerId];
-        NSArray *clientIds = [command.mArray copy];
+        NSArray *clientIds = [command.m copy];
         
         AVIMSignature *signature = [_imClient signatureWithClientId:clientIdString conversationId:command.cid action:actionString actionOnClientIds:clientIds];
-        [genericCommand avim_addRequiredKeyWithCommand:command];
-        [genericCommand avim_addRequiredKeyForConvMessageWithSignature:signature];
+        genericCommand = [genericCommand avim_addRequiredKeyWithCommand:(AVIMMessage *)command];
+        genericCommand = [genericCommand avim_addRequiredKeyForConvMessageWithSignature:signature];
+        genericCommand.needResponse = YES;
         if ([AVIMClient checkErrorForSignature:signature command:genericCommand]) {
             return;
         }
         [genericCommand setCallback:^(AVIMGenericCommand *outCommand, AVIMGenericCommand *inCommand, NSError *error) {
             if (!error) {
                 AVIMConvCommand *conversationOutCommand = outCommand.convMessage;
-                [self removeMembers:[conversationOutCommand.mArray copy]];
+                [self removeMembers:[conversationOutCommand.m copy]];
                 [self removeCachedConversation];
                 if ([clientIds containsObject:myClientId]) {
                     [self removeCachedMessages];
@@ -535,16 +543,18 @@ static dispatch_queue_t messageCacheOperationQueue;
 
 - (void)countMembersWithCallback:(AVIMIntegerResultBlock)callback {
     dispatch_async([AVIMClient imClientQueue], ^{
-        AVIMGenericCommand *genericCommand = [[AVIMGenericCommand alloc] init];
+        AVIMGenericCommandBuilder *genericCommandBuilder = [AVIMGenericCommand builder];
+        genericCommandBuilder.cmd = AVIMCommandTypeConv;
+        genericCommandBuilder.peerId = _imClient.clientId;
+        genericCommandBuilder.op = AVIMOpTypeCount;
+        
+        AVIMConvCommandBuilder *convCommandBuilder = [AVIMConvCommand builder];
+        convCommandBuilder.cid = self.conversationId;
+        
+        AVIMConvCommand *command = [convCommandBuilder build];
+        AVIMGenericCommand *genericCommand = [genericCommandBuilder build];
+        genericCommand = [genericCommand avim_addRequiredKeyWithCommand:(AVIMMessage *)command];
         genericCommand.needResponse = YES;
-        genericCommand.cmd = AVIMCommandType_Conv;
-        genericCommand.peerId = _imClient.clientId;
-        genericCommand.op = AVIMOpType_Count;
-        
-        AVIMConvCommand *command = [[AVIMConvCommand alloc] init];
-        command.cid = self.conversationId;
-        
-        [genericCommand avim_addRequiredKeyWithCommand:command];
         [genericCommand setCallback:^(AVIMGenericCommand *outCommand, AVIMGenericCommand *inCommand, NSError *error) {
             if (!error) {
                 AVIMConvCommand *conversationInCommand = inCommand.convMessage;
@@ -558,16 +568,19 @@ static dispatch_queue_t messageCacheOperationQueue;
 }
 
 - (AVIMGenericCommand *)generateGenericCommandWithAttributes:(NSDictionary *)attributes {
-    AVIMGenericCommand *genericCommand = [[AVIMGenericCommand alloc] init];
-    genericCommand.needResponse = YES;
-    genericCommand.cmd = AVIMCommandType_Conv;
-    genericCommand.peerId = self.imClient.clientId;
+    AVIMGenericCommandBuilder *genericCommandBuilder = [AVIMGenericCommand builder];
+    genericCommandBuilder.cmd = AVIMCommandTypeConv;
+    genericCommandBuilder.peerId = self.imClient.clientId;
+    genericCommandBuilder.op = AVIMOpTypeUpdate;
     
-    AVIMConvCommand *convCommand = [[AVIMConvCommand alloc] init];
-    convCommand.cid = self.conversationId;
-    genericCommand.op = AVIMOpType_Update;
-    convCommand.attr = [AVIMCommandFormatter JSONObjectWithDictionary:attributes];
-    [genericCommand avim_addRequiredKeyWithCommand:convCommand];
+    AVIMConvCommandBuilder *convCommandBuilder = [AVIMConvCommand builder];
+    convCommandBuilder.cid = self.conversationId;
+    convCommandBuilder.attr = [AVIMCommandFormatter JSONObjectWithDictionary:attributes];
+    
+    AVIMConvCommand *convCommand = [convCommandBuilder build];
+    AVIMGenericCommand *genericCommand = [genericCommandBuilder build];
+    genericCommand = [genericCommand avim_addRequiredKeyWithCommand:(AVIMMessage *)convCommand];
+    genericCommand.needResponse = YES;
     return genericCommand;
 }
 
@@ -623,15 +636,18 @@ static dispatch_queue_t messageCacheOperationQueue;
 
 - (void)muteWithCallback:(AVIMBooleanResultBlock)callback {
     dispatch_async([AVIMClient imClientQueue], ^{
-        AVIMGenericCommand *genericCommand = [[AVIMGenericCommand alloc] init];
-        genericCommand.needResponse = YES;
-        genericCommand.cmd = AVIMCommandType_Conv;
-        genericCommand.peerId = _imClient.clientId;
-        genericCommand.op = AVIMOpType_Mute;
+        AVIMGenericCommandBuilder *genericCommandBuilder = [AVIMGenericCommand builder];
+        genericCommandBuilder.cmd = AVIMCommandTypeConv;
+        genericCommandBuilder.peerId = _imClient.clientId;
+        genericCommandBuilder.op = AVIMOpTypeMute;
         
-        AVIMConvCommand *convCommand = [[AVIMConvCommand alloc] init];
-        convCommand.cid = self.conversationId;
-        [genericCommand avim_addRequiredKeyWithCommand:convCommand];
+        AVIMConvCommandBuilder *convCommandBuilder = [AVIMConvCommand builder];
+        convCommandBuilder.cid = self.conversationId;
+        
+        AVIMConvCommand *convCommand = [convCommandBuilder build];
+        AVIMGenericCommand *genericCommand = [genericCommandBuilder build];
+        genericCommand = [genericCommand avim_addRequiredKeyWithCommand:(AVIMMessage *)convCommand];
+        genericCommand.needResponse = YES;
         [genericCommand setCallback:^(AVIMGenericCommand *outCommand, AVIMGenericCommand *inCommand, NSError *error) {
             if (!error) {
                 self.muted = YES;
@@ -647,15 +663,18 @@ static dispatch_queue_t messageCacheOperationQueue;
 
 - (void)unmuteWithCallback:(AVIMBooleanResultBlock)callback {
     dispatch_async([AVIMClient imClientQueue], ^{
-        AVIMGenericCommand *genericCommand = [[AVIMGenericCommand alloc] init];
-        genericCommand.needResponse = YES;
-        genericCommand.cmd = AVIMCommandType_Conv;
-        genericCommand.peerId = _imClient.clientId;
-        genericCommand.op = AVIMOpType_Unmute;
+        AVIMGenericCommandBuilder *genericCommandBuilder = [AVIMGenericCommand builder];
+        genericCommandBuilder.cmd = AVIMCommandTypeConv;
+        genericCommandBuilder.peerId = _imClient.clientId;
+        genericCommandBuilder.op = AVIMOpTypeUnmute;
         
-        AVIMConvCommand *convCommand = [[AVIMConvCommand alloc] init];
-        convCommand.cid = self.conversationId;
-        [genericCommand avim_addRequiredKeyWithCommand:convCommand];
+        AVIMConvCommandBuilder *convCommandBuilder = [AVIMConvCommand builder];
+        convCommandBuilder.cid = self.conversationId;
+        
+        AVIMConvCommand *convCommand = [convCommandBuilder build];
+        AVIMGenericCommand *genericCommand = [genericCommandBuilder build];
+        genericCommand = [genericCommand avim_addRequiredKeyWithCommand:(AVIMMessage *)convCommand];
+        genericCommand.needResponse = YES;
         [genericCommand setCallback:^(AVIMGenericCommand *outCommand, AVIMGenericCommand *inCommand, NSError *error) {
             if (!error) {
                 self.muted = NO;
@@ -674,14 +693,15 @@ static dispatch_queue_t messageCacheOperationQueue;
     
     dispatch_async([AVIMClient imClientQueue], ^{
         [ws.imClient sendCommand:({
-            AVIMGenericCommand *genericCommand = [[AVIMGenericCommand alloc] init];
-            genericCommand.needResponse = YES;
-            genericCommand.cmd = AVIMCommandType_Read;
-            genericCommand.peerId = ws.imClient.clientId;
+            AVIMGenericCommandBuilder *genericCommandBuilder = [AVIMGenericCommand builder];
+            genericCommandBuilder.cmd = AVIMCommandTypeRead;
+            genericCommandBuilder.peerId = ws.imClient.clientId;
             
-            AVIMReadCommand *readCommand = [[AVIMReadCommand alloc] init];
-            readCommand.cid = ws.conversationId;
-            [genericCommand avim_addRequiredKeyWithCommand:readCommand];
+            AVIMReadCommandBuilder *readCommandBuilder = [AVIMReadCommand builder];
+            readCommandBuilder.cid = ws.conversationId;
+            AVIMGenericCommand *genericCommand = [genericCommandBuilder build];
+            genericCommand = [genericCommand avim_addRequiredKeyWithCommand:(AVIMMessage *)[readCommandBuilder build]];
+            genericCommand.needResponse = YES;
             genericCommand;
         })];
     });
@@ -709,20 +729,21 @@ static dispatch_queue_t messageCacheOperationQueue;
             return;
         }
 
-        AVIMReadTuple *readTuple = [[AVIMReadTuple alloc] init];
-        AVIMReadCommand *readCommand = [[AVIMReadCommand alloc] init];
-        AVIMGenericCommand *genericCommand = [[AVIMGenericCommand alloc] init];
+        AVIMReadTupleBuilder *readTupleBuilder = [AVIMReadTuple builder];
+        AVIMReadCommandBuilder *readCommandBuilder = [AVIMReadCommand builder];
+        AVIMGenericCommandBuilder *genericCommandBuilder = [AVIMGenericCommand builder];
 
-        readTuple.cid = self.conversationId;
-        readTuple.mid = lastMessageId;
-        readTuple.timestamp = lastTimestamp;
+        readTupleBuilder.cid = self.conversationId;
+        readTupleBuilder.mid = lastMessageId;
+        readTupleBuilder.timestamp = lastTimestamp;
 
-        readCommand.convsArray = [NSMutableArray arrayWithObject:readTuple];
+        readCommandBuilder.convsArray = [NSMutableArray arrayWithObject:[readTupleBuilder build]];
 
-        genericCommand.cmd = AVIMCommandType_Read;
-        genericCommand.peerId = self.imClient.clientId;
+        genericCommandBuilder.cmd = AVIMCommandTypeRead;
+        genericCommandBuilder.peerId = self.imClient.clientId;
 
-        [genericCommand avim_addRequiredKeyWithCommand:readCommand];
+        AVIMGenericCommand *genericCommand = [genericCommandBuilder build];
+        genericCommand = [genericCommand avim_addRequiredKeyWithCommand:(AVIMMessage *)[readCommandBuilder build]];
 
         [self.imClient resetUnreadMessagesCountForConversation:self];
         [self.imClient sendCommand:genericCommand];
@@ -906,31 +927,30 @@ static dispatch_queue_t messageCacheOperationQueue;
         BOOL transient = option.transient;
         BOOL receipt = option.receipt;
 
-        AVIMGenericCommand *genericCommand = [[AVIMGenericCommand alloc] init];
-        genericCommand.needResponse = YES;
-        genericCommand.cmd = AVIMCommandType_Direct;
+        AVIMGenericCommandBuilder *genericCommandBuilder = [AVIMGenericCommand builder];
+        genericCommandBuilder.cmd = AVIMCommandTypeDirect;
 
         if (option.priority > 0) {
             if (self.transient) {
-                genericCommand.priority = option.priority;
+                genericCommandBuilder.priority = option.priority;
             } else {
                 AVLoggerInfo(AVLoggerDomainIM, @"Message priority has no effect in non-transient conversation.");
             }
         }
+        
+        AVIMGenericCommand *genericCommand = [genericCommandBuilder build];
+        genericCommand.needResponse = YES;
 
-        AVIMDirectCommand *directCommand = [[AVIMDirectCommand alloc] init];
-        [genericCommand avim_addRequiredKeyWithCommand:directCommand];
-        [genericCommand avim_addRequiredKeyForDirectMessageWithMessage:message transient:NO];
-
+        AVIMDirectCommandBuilder *directCommandBuilder = [AVIMDirectCommand builder];
         if (will) {
-            directCommand.will = YES;
+            directCommandBuilder.will = YES;
         }
         if (transient) {
-            directCommand.transient = YES;
+            directCommandBuilder.transient = YES;
             genericCommand.needResponse = NO;
         }
         if (receipt) {
-            directCommand.r = YES;
+            directCommandBuilder.r = YES;
         }
         if (option.pushData) {
             if (option.transient || self.transient) {
@@ -942,11 +962,14 @@ static dispatch_queue_t messageCacheOperationQueue;
                 if (error) {
                     AVLoggerInfo(AVLoggerDomainIM, @"Push data cannot be serialize to JSON string. Error: %@.", error.localizedDescription);
                 } else {
-                    directCommand.pushData = [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding];
+                    directCommandBuilder.pushData = [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding];
                 }
             }
         }
-
+        AVIMDirectCommand *directCommand = [directCommandBuilder build];
+        genericCommand = [genericCommand avim_addRequiredKeyWithCommand:(AVIMMessage *)directCommand];
+        genericCommand = [genericCommand avim_addRequiredKeyForDirectMessageWithMessage:message transient:NO];
+        
         [genericCommand setCallback:^(AVIMGenericCommand *outCommand, AVIMGenericCommand *inCommand, NSError *error) {
             AVIMDirectCommand *directOutCommand = outCommand.directMessage;
             AVIMMessage *message = outCommand.directMessage.message;
@@ -986,27 +1009,27 @@ static dispatch_queue_t messageCacheOperationQueue;
 - (AVIMGenericCommand *)patchCommandWithOldMessage:(AVIMMessage *)oldMessage
                                         newMessage:(AVIMMessage *)newMessage
 {
-    AVIMGenericCommand *command = [[AVIMGenericCommand alloc] init];
+    AVIMGenericCommandBuilder *genericCommandBuilder = [AVIMGenericCommand builder];
+    genericCommandBuilder.cmd = AVIMCommandTypePatch;
+    genericCommandBuilder.op = AVIMOpTypeModify;
+    genericCommandBuilder.peerId = self.clientId;
 
-    command.needResponse = YES;
-    command.cmd = AVIMCommandType_Patch;
-    command.op = AVIMOpType_Modify;
-    command.peerId = self.clientId;
+    AVIMPatchItemBuilder *patchItemBuilder = [AVIMPatchItem builder];
 
-    AVIMPatchItem *patchItem = [[AVIMPatchItem alloc] init];
+    patchItemBuilder.cid = self.conversationId;
+    patchItemBuilder.mid = oldMessage.messageId;
+    patchItemBuilder.timestamp = oldMessage.sendTimestamp;
+    patchItemBuilder.data = newMessage.payload;
 
-    patchItem.cid = self.conversationId;
-    patchItem.mid = oldMessage.messageId;
-    patchItem.timestamp = oldMessage.sendTimestamp;
-    patchItem.data_p = newMessage.payload;
+    NSArray *patchesArray = @[[patchItemBuilder build]];
+    AVIMPatchCommandBuilder *patchMessageBuilder = [AVIMPatchCommand builder];
+    patchMessageBuilder.patchesArray = patchesArray;
+    genericCommandBuilder.patchMessage = [patchMessageBuilder build];
+    
+    AVIMGenericCommand *genericCommand = [genericCommandBuilder build];
+    genericCommand.needResponse = YES;
 
-    NSMutableArray *patchesArray = @[patchItem];
-    AVIMPatchCommand *patchMessage = [[AVIMPatchCommand alloc] init];
-
-    patchMessage.patchesArray = patchesArray;
-    command.patchMessage = patchMessage;
-
-    return command;
+    return genericCommand;
 }
 
 - (BOOL)containsMessage:(AVIMMessage *)message {
@@ -1196,18 +1219,20 @@ static dispatch_queue_t messageCacheOperationQueue;
     
     if (useUnread) {
         AVIMClient *client = self.imClient;
-        AVIMGenericCommand *genericCommand = [[AVIMGenericCommand alloc] init];
-        genericCommand.cmd = AVIMCommandType_Ack;
-        genericCommand.needResponse = YES;
-        genericCommand.peerId = client.clientId;
+        AVIMGenericCommandBuilder *genericCommandBuilder = [AVIMGenericCommand builder];
+        genericCommandBuilder.cmd = AVIMCommandTypeAck;
+        genericCommandBuilder.peerId = client.clientId;
         
-        AVIMAckCommand *ackOutCommand = [[AVIMAckCommand alloc] init];
-        ackOutCommand.cid = self.conversationId;
+        AVIMAckCommandBuilder *ackOutCommandBuilder = [AVIMAckCommand builder];
+        ackOutCommandBuilder.cid = self.conversationId;
         int64_t fromts = [[messages firstObject] sendTimestamp];
         int64_t tots   = [[messages lastObject] sendTimestamp];
-        ackOutCommand.fromts = MIN(fromts, tots);
-        ackOutCommand.tots   = MAX(fromts, tots);
-        [genericCommand avim_addRequiredKeyWithCommand:ackOutCommand];
+        ackOutCommandBuilder.fromts = MIN(fromts, tots);
+        ackOutCommandBuilder.tots   = MAX(fromts, tots);
+        
+        AVIMGenericCommand *genericCommand = [genericCommandBuilder build];
+        genericCommand = [genericCommand avim_addRequiredKeyWithCommand:(AVIMMessage *)[ackOutCommandBuilder build]];
+        genericCommand.needResponse = YES;
         [client sendCommand:genericCommand];
     }
 }
@@ -1216,16 +1241,17 @@ static dispatch_queue_t messageCacheOperationQueue;
                                   callback:(AVIMArrayResultBlock)callback
 {
     AVIMLogsCommand *logsOutCommand = genericCommand.logsMessage;
+    __block AVIMGenericCommand *genericCommand2 = genericCommand;
     dispatch_async([AVIMClient imClientQueue], ^{
-        [genericCommand setCallback:^(AVIMGenericCommand *outCommand, AVIMGenericCommand *inCommand, NSError *error) {
+        [genericCommand2 setCallback:^(AVIMGenericCommand *outCommand, AVIMGenericCommand *inCommand, NSError *error) {
             if (!error) {
                 AVIMLogsCommand *logsInCommand = inCommand.logsMessage;
                 AVIMLogsCommand *logsOutCommand = outCommand.logsMessage;
-                NSArray *logs = [logsInCommand.logsArray copy];
+                NSArray *logs = [logsInCommand.logs copy];
                 NSMutableArray *messages = [[NSMutableArray alloc] init];
                 for (AVIMLogItem *logsItem in logs) {
                     AVIMMessage *message = nil;
-                    id data = [logsItem data_p];
+                    id data = [logsItem data];
                     if (![data isKindOfClass:[NSString class]]) {
                         AVLoggerError(AVOSCloudIMErrorDomain, @"Received an invalid message.");
                         continue;
@@ -1241,7 +1267,7 @@ static dispatch_queue_t messageCacheOperationQueue;
                     }
                     message.conversationId = logsOutCommand.cid;
                     message.sendTimestamp = [logsItem timestamp];
-                    message.clientId = [logsItem from];
+                    message.clientId = [logsItem pb_from];
                     message.messageId = [logsItem msgId];
 
                     if (logsItem.hasPatchTimestamp)
@@ -1258,8 +1284,8 @@ static dispatch_queue_t messageCacheOperationQueue;
                 [AVIMBlockHelper callArrayResultBlock:callback array:nil error:error];
             }
         }];
-        [genericCommand avim_addRequiredKeyWithCommand:logsOutCommand];
-        [_imClient sendCommand:genericCommand];
+        genericCommand2 = [genericCommand2 avim_addRequiredKeyWithCommand:(AVIMMessage *)logsOutCommand];
+        [_imClient sendCommand:genericCommand2];
     });
 }
 
@@ -1268,18 +1294,19 @@ static dispatch_queue_t messageCacheOperationQueue;
                                   limit:(NSUInteger)limit
                                callback:(AVIMArrayResultBlock)callback
 {
-    AVIMGenericCommand *genericCommand = [[AVIMGenericCommand alloc] init];
+    AVIMGenericCommandBuilder *genericCommandBuilder = [AVIMGenericCommand builder];
+    genericCommandBuilder.cmd = AVIMCommandTypeLogs;
+    genericCommandBuilder.peerId = _imClient.clientId;
+    
+    AVIMLogsCommandBuilder *logsCommandBuilder = [AVIMLogsCommand builder];
+    logsCommandBuilder.cid    = _conversationId;
+    logsCommandBuilder.mid    = messageId;
+    logsCommandBuilder.t      = LCIM_VALID_TIMESTAMP(timestamp);
+    logsCommandBuilder.l      = LCIM_VALID_LIMIT(limit);
+    
+    AVIMGenericCommand *genericCommand = [genericCommandBuilder build];
+    genericCommand = [genericCommand avim_addRequiredKeyWithCommand:(AVIMMessage *)[logsCommandBuilder build]];
     genericCommand.needResponse = YES;
-    genericCommand.cmd = AVIMCommandType_Logs;
-    genericCommand.peerId = _imClient.clientId;
-    
-    AVIMLogsCommand *logsCommand = [[AVIMLogsCommand alloc] init];
-    logsCommand.cid    = _conversationId;
-    logsCommand.mid    = messageId;
-    logsCommand.t      = LCIM_VALID_TIMESTAMP(timestamp);
-    logsCommand.l      = LCIM_VALID_LIMIT(limit);
-    
-    [genericCommand avim_addRequiredKeyWithCommand:logsCommand];
     [self queryMessagesFromServerWithCommand:genericCommand callback:callback];
 }
 
@@ -1290,18 +1317,20 @@ static dispatch_queue_t messageCacheOperationQueue;
                                   limit:(NSUInteger)limit
                                callback:(AVIMArrayResultBlock)callback
 {
-    AVIMGenericCommand *genericCommand = [[AVIMGenericCommand alloc] init];
-    AVIMLogsCommand *logsCommand = [[AVIMLogsCommand alloc] init];
+    AVIMGenericCommandBuilder *genericCommandBuilder = [AVIMGenericCommand builder];
+    AVIMLogsCommandBuilder *logsCommandBuilder = [AVIMLogsCommand builder];
+    genericCommandBuilder.cmd = AVIMCommandTypeLogs;
+    genericCommandBuilder.peerId = _imClient.clientId;
+    logsCommandBuilder.cid    = _conversationId;
+    logsCommandBuilder.mid    = messageId;
+    logsCommandBuilder.tmid   = toMessageId;
+    logsCommandBuilder.tt     = MAX(toTimestamp, 0);
+    logsCommandBuilder.t      = MAX(timestamp, 0);
+    logsCommandBuilder.l      = LCIM_VALID_LIMIT(limit);
+    
+    AVIMGenericCommand *genericCommand = [genericCommandBuilder build];
+    genericCommand = [genericCommand avim_addRequiredKeyWithCommand:(AVIMMessage *)[logsCommandBuilder build]];
     genericCommand.needResponse = YES;
-    genericCommand.cmd = AVIMCommandType_Logs;
-    genericCommand.peerId = _imClient.clientId;
-    logsCommand.cid    = _conversationId;
-    logsCommand.mid    = messageId;
-    logsCommand.tmid   = toMessageId;
-    logsCommand.tt     = MAX(toTimestamp, 0);
-    logsCommand.t      = MAX(timestamp, 0);
-    logsCommand.l      = LCIM_VALID_LIMIT(limit);
-    [genericCommand avim_addRequiredKeyWithCommand:logsCommand];
     [self queryMessagesFromServerWithCommand:genericCommand callback:callback];
 }
 
@@ -1520,38 +1549,38 @@ static dispatch_queue_t messageCacheOperationQueue;
                           limit:(NSUInteger)limit
                        callback:(AVIMArrayResultBlock)callback
 {
-    AVIMLogsCommand *logsCommand = [[AVIMLogsCommand alloc] init];
+    AVIMLogsCommandBuilder *logsCommandBuilder = [AVIMLogsCommand builder];
 
-    logsCommand.cid  = _conversationId;
-    logsCommand.l    = LCIM_VALID_LIMIT(limit);
+    logsCommandBuilder.cid  = _conversationId;
+    logsCommandBuilder.l    = LCIM_VALID_LIMIT(limit);
 
-    logsCommand.direction = (direction == AVIMMessageQueryDirectionFromOldToNew)
-        ? AVIMLogsCommand_QueryDirection_New
-        : AVIMLogsCommand_QueryDirection_Old;
+    logsCommandBuilder.direction = (direction == AVIMMessageQueryDirectionFromOldToNew)
+        ? AVIMLogsCommand_QueryDirectionNew
+        : AVIMLogsCommand_QueryDirectionOld;
 
     AVIMMessageIntervalBound *startIntervalBound = interval.startIntervalBound;
     AVIMMessageIntervalBound *endIntervalBound = interval.endIntervalBound;
 
-    logsCommand.mid  = startIntervalBound.messageId;
-    logsCommand.tmid = endIntervalBound.messageId;
+    logsCommandBuilder.mid  = startIntervalBound.messageId;
+    logsCommandBuilder.tmid = endIntervalBound.messageId;
 
-    logsCommand.tIncluded = startIntervalBound.closed;
-    logsCommand.ttIncluded = endIntervalBound.closed;
+    logsCommandBuilder.tIncluded = startIntervalBound.closed;
+    logsCommandBuilder.ttIncluded = endIntervalBound.closed;
 
     int64_t t = startIntervalBound.timestamp;
     int64_t tt = endIntervalBound.timestamp;
 
     if (t > 0)
-        logsCommand.t = t;
+        logsCommandBuilder.t = t;
     if (tt > 0)
-        logsCommand.tt = tt;
+        logsCommandBuilder.tt = tt;
 
-    AVIMGenericCommand *genericCommand = [[AVIMGenericCommand alloc] init];
+    AVIMGenericCommandBuilder *genericCommandBuilder = [AVIMGenericCommand builder];
+    genericCommandBuilder.cmd = AVIMCommandTypeLogs;
+    genericCommandBuilder.peerId = _imClient.clientId;
+    genericCommandBuilder.logsMessage = [logsCommandBuilder build];
+    AVIMGenericCommand *genericCommand = [genericCommandBuilder build];
     genericCommand.needResponse = YES;
-    genericCommand.cmd = AVIMCommandType_Logs;
-    genericCommand.peerId = _imClient.clientId;
-    genericCommand.logsMessage = logsCommand;
-
     [self queryMessagesFromServerWithCommand:genericCommand callback:callback];
 }
 

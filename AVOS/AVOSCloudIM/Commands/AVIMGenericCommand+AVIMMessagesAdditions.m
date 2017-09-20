@@ -37,100 +37,124 @@ static uint16_t _searial_id = 0;
     objc_setAssociatedObject(self, @selector(needResponse), needResponseObject, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
 }
 
-- (void)avim_addRequiredKeyWithCommand:(LCIMMessage *)command {
+- (AVIMGenericCommand *)avim_addRequiredKeyWithCommand:(AVIMMessage *)command {
     AVIMCommandType commandType = self.cmd;
+    AVIMGenericCommandBuilder *builder = [AVIMGenericCommand builderWithPrototype:self];
+    
     switch (commandType) {
             
-        case AVIMCommandType_Session:
-            self.sessionMessage = (AVIMSessionCommand *)command;
+        case AVIMCommandTypeSession:
+            builder.sessionMessage = (AVIMSessionCommand *)command;
             break;
             
-        case AVIMCommandType_Conv:
-            self.convMessage = (AVIMConvCommand *)command;
+        case AVIMCommandTypeConv:
+            builder.convMessage = (AVIMConvCommand *)command;
             break;
             
-        case AVIMCommandType_Direct:
-            self.directMessage = (AVIMDirectCommand *)command;
+        case AVIMCommandTypeDirect:
+            builder.directMessage = (AVIMDirectCommand *)command;
             break;
             
-        case AVIMCommandType_Ack:
-            self.ackMessage = (AVIMAckCommand *)command;
+        case AVIMCommandTypeAck:
+            builder.ackMessage = (AVIMAckCommand *)command;
             self.needResponse = NO;
             break;
             
-        case AVIMCommandType_Rcp:
-            self.rcpMessage = (AVIMRcpCommand *)command;
+        case AVIMCommandTypeRcp:
+            builder.rcpMessage = (AVIMRcpCommand *)command;
             break;
             
-        case AVIMCommandType_Unread:
-            self.unreadMessage = (AVIMUnreadCommand *)command;
+        case AVIMCommandTypeUnread:
+            builder.unreadMessage = (AVIMUnreadCommand *)command;
             break;
             
-        case AVIMCommandType_Logs:
-            self.logsMessage = (AVIMLogsCommand *)command;
+        case AVIMCommandTypeLogs:
+            builder.logsMessage = (AVIMLogsCommand *)command;
             break;
             
-        case AVIMCommandType_Error:
-            self.errorMessage = (AVIMErrorCommand *)command;
+        case AVIMCommandTypeError:
+            builder.errorMessage = (AVIMErrorCommand *)command;
             break;
             
-        case AVIMCommandType_Data:
-            self.dataMessage = (AVIMDataCommand *)command;
+        case AVIMCommandTypeData:
+            builder.dataMessage = (AVIMDataCommand *)command;
             break;
             
-        case AVIMCommandType_Room:
-            self.roomMessage = (AVIMRoomCommand *)command;
+        case AVIMCommandTypeRoom:
+            builder.roomMessage = (AVIMRoomCommand *)command;
             break;
             
-        case AVIMCommandType_Read:
-            self.readMessage = (AVIMReadCommand *)command;
+        case AVIMCommandTypeRead:
+            builder.readMessage = (AVIMReadCommand *)command;
             break;
             
-        case AVIMCommandType_Presence :
-            self.presenceMessage = (AVIMPresenceCommand *)command;
+        case AVIMCommandTypePresence :
+            builder.presenceMessage = (AVIMPresenceCommand *)command;
             break;
             
-        case AVIMCommandType_Report:
-            self.reportMessage = (AVIMReportCommand *)command;
+        case AVIMCommandTypeReport:
+            builder.reportMessage = (AVIMReportCommand *)command;
             break;
     }
+    return [builder build];
 }
 
-- (void)avim_addRequiredKeyForConvMessageWithSignature:(AVIMSignature *)signature {
+- (AVIMGenericCommand *)avim_addRequiredKeyForConvMessageWithSignature:(AVIMSignature *)signature {
     NSAssert(self.hasConvMessage, ([NSString stringWithFormat:@"before call %@, make sure you have called `-avim_addRequiredKey`", NSStringFromSelector(_cmd)]));
     if (signature) {
-        self.convMessage.s = signature.signature;
-        self.convMessage.t = signature.timestamp;
-        self.convMessage.n = signature.nonce;
+        AVIMGenericCommandBuilder *builder = [AVIMGenericCommand builderWithPrototype:self];
+        AVIMConvCommandBuilder *convBuilder = [AVIMConvCommand builderWithPrototype:builder.convMessage];
+        convBuilder.s = signature.signature;
+        convBuilder.t = signature.timestamp;
+        convBuilder.n = signature.nonce;
+        builder.convMessage = [convBuilder build];
+        return [builder build];
+    } else {
+        return self;
     }
 }
 
-- (void)avim_addRequiredKeyForSessionMessageWithSignature:(AVIMSignature *)signature {
+- (AVIMGenericCommand *)avim_addRequiredKeyForSessionMessageWithSignature:(AVIMSignature *)signature {
     NSAssert(self.hasSessionMessage, ([NSString stringWithFormat:@"before call %@, make sure you have called `-avim_addRequiredKey`", NSStringFromSelector(_cmd)]));
     if (signature) {
         /* `st` and `s t n` are The mutex relationship, If you want `s t n` there is no need to add `st`. Otherwise, it will case SESSION_TOKEN_EXPIRED error, and this may cause an error whose code is 1001(Stream end encountered), 4108(LOGIN_TIMEOUT) */
+        AVIMGenericCommandBuilder *builder = [AVIMGenericCommand builderWithPrototype:self];
+        AVIMSessionCommandBuilder *sessionBuilder = [AVIMSessionCommand builderWithPrototype:builder.sessionMessage];
         if (self.sessionMessage.hasSt) {
-            self.sessionMessage.st = nil;
+            sessionBuilder.st = nil;
         }
-        self.sessionMessage.s = signature.signature;
-        self.sessionMessage.t = signature.timestamp;
-        self.sessionMessage.n = signature.nonce;
+        sessionBuilder.s = signature.signature;
+        sessionBuilder.t = signature.timestamp;
+        sessionBuilder.n = signature.nonce;
+        builder.sessionMessage = [sessionBuilder build];
+        return [builder build];
+    } else {
+        return self;
     }
 }
 
-- (void)avim_addRequiredKeyForDirectMessageWithMessage:(AVIMMessage *)message transient:(BOOL)transient {
+- (AVIMGenericCommand *)avim_addRequiredKeyForDirectMessageWithMessage:(AVIMMessage *)message transient:(BOOL)transient {
     NSAssert(self.hasDirectMessage, ([NSString stringWithFormat:@"before call %@, make sure you have called `-avim_addRequiredKey`", NSStringFromSelector(_cmd)]));
     if (message) {
-        self.peerId = message.clientId;
-        self.directMessage.cid = message.conversationId;
-        self.directMessage.msg = message.payload;
-        self.directMessage.transient = transient;
-        self.directMessage.message = message;
+        AVIMGenericCommandBuilder *builder = [AVIMGenericCommand builderWithPrototype:self];
+        AVIMDirectCommandBuilder *directBuilder = [AVIMDirectCommand builderWithPrototype:builder.directMessage];
+        builder.peerId = message.clientId;
+        directBuilder.cid = message.conversationId;
+        directBuilder.msg = message.payload;
+        directBuilder.transient = transient;
+        AVIMDirectCommand *directMessage = [directBuilder build];
+        directMessage.message = message;
+        builder.directMessage = directMessage;
+        return [builder build];
+    } else {
+        return self;
     }
 }
 
-- (void)avim_addOrRefreshSerialId {
-    self.i = [[self class] nextSerialId];
+- (AVIMGenericCommand *)avim_addOrRefreshSerialId {
+    AVIMGenericCommandBuilder *builder = [AVIMGenericCommand builderWithPrototype:self];
+    builder.i = [[self class] nextSerialId];
+    return [builder build];
 }
 
 + (uint16_t)nextSerialId {
@@ -176,7 +200,7 @@ static uint16_t _searial_id = 0;
     AVIMCommandType commandType = self.cmd;
     switch (commandType) {
             
-        case AVIMCommandType_Session:
+        case AVIMCommandTypeSession:
             [requiredKeys addObjectsFromArray:({
                 NSArray *array = @[
                                    [self avim_invocation:@selector(hasCmd) target:self],
@@ -188,7 +212,7 @@ static uint16_t _searial_id = 0;
             
             break;
             
-        case AVIMCommandType_Conv:
+        case AVIMCommandTypeConv:
             //@[@"cmd", @"op", @"peerId"];
             [requiredKeys addObjectsFromArray:({
                 NSArray *array = @[
@@ -199,7 +223,7 @@ static uint16_t _searial_id = 0;
                 array;
             })];
             
-            if (self.op == AVIMOpType_Add || self.op == AVIMOpType_Remove) {
+            if (self.op == AVIMOpTypeAdd || self.op == AVIMOpTypeRemove) {
                 [requiredKeys addObjectsFromArray:({
                     NSArray *array = @[
                                        [self avim_invocation:@selector(hasCid) target:self.convMessage],
@@ -208,7 +232,7 @@ static uint16_t _searial_id = 0;
                     array;
                 })];
                 
-            } else if (self.op == AVIMOpType_Update) {
+            } else if (self.op == AVIMOpTypeUpdate) {
                 [requiredKeys addObjectsFromArray:({
                     NSArray *array = @[
                                        [self avim_invocation:@selector(hasCid) target:self.convMessage],
@@ -221,7 +245,7 @@ static uint16_t _searial_id = 0;
             
             break;
             
-        case AVIMCommandType_Direct:
+        case AVIMCommandTypeDirect:
             // @[@"cmd", @"peerId", @"cid", @"msg"];
             [requiredKeys addObjectsFromArray:({
                 NSArray *array = @[
@@ -234,7 +258,7 @@ static uint16_t _searial_id = 0;
             })];
             break;
             
-        case AVIMCommandType_Ack:
+        case AVIMCommandTypeAck:
             //@[@"cmd", @"peerId", @"cid"];
             [requiredKeys addObjectsFromArray:({
                 NSArray *array = @[
@@ -247,7 +271,7 @@ static uint16_t _searial_id = 0;
             
             break;
             
-        case AVIMCommandType_Logs:
+        case AVIMCommandTypeLogs:
             //    return @[@"cmd", @"peerId", @"cid"];
             [requiredKeys addObjectsFromArray:({
                 NSArray *array = @[
@@ -370,60 +394,60 @@ static uint16_t _searial_id = 0;
     return error;
 }
 
-- (LCIMMessage *)avim_messageCommand {
-    LCIMMessage *result = nil;
+- (AVIMMessage *)avim_messageCommand {
+    AVIMMessage *result = nil;
     AVIMCommandType commandType = self.cmd;
     switch (commandType) {
             
-        case AVIMCommandType_Session:
+        case AVIMCommandTypeSession:
             result = self.sessionMessage;
             break;
             
-        case AVIMCommandType_Conv:
+        case AVIMCommandTypeConv:
             result = self.convMessage;
             break;
             
-        case AVIMCommandType_Direct:
+        case AVIMCommandTypeDirect:
             result = self.directMessage;
             break;
             
-        case AVIMCommandType_Ack:
+        case AVIMCommandTypeAck:
             result = self.ackMessage;
             break;
             
-        case AVIMCommandType_Rcp:
+        case AVIMCommandTypeRcp:
             result = self.rcpMessage;
             break;
             
-        case AVIMCommandType_Unread:
+        case AVIMCommandTypeUnread:
             result = self.unreadMessage;
             break;
             
-        case AVIMCommandType_Logs:
+        case AVIMCommandTypeLogs:
             result = self.logsMessage;
             break;
             
-        case AVIMCommandType_Error:
+        case AVIMCommandTypeError:
             result = self.errorMessage;
             break;
             
-        case AVIMCommandType_Data:
+        case AVIMCommandTypeData:
             result = self.dataMessage;
             break;
             
-        case AVIMCommandType_Room:
+        case AVIMCommandTypeRoom:
             result = self.roomMessage;
             break;
             
-        case AVIMCommandType_Read:
+        case AVIMCommandTypeRead:
             result = self.readMessage;
             break;
             
-        case AVIMCommandType_Presence:
+        case AVIMCommandTypePresence:
             result = self.presenceMessage;
             break;
             
-        case AVIMCommandType_Report:
+        case AVIMCommandTypeReport:
             result = self.reportMessage;
             break;
     }
@@ -435,7 +459,7 @@ static uint16_t _searial_id = 0;
     [command setObject:self.peerId forKey:@"peerId"];
     [command setObject:kAVIMConversationOperationQuery forKey:@"op"];
 
-    NSData *data = [self.convMessage.where.data_p dataUsingEncoding:NSUTF8StringEncoding];
+    NSData *data = [self.convMessage.where.data dataUsingEncoding:NSUTF8StringEncoding];
     NSDictionary *json = [NSJSONSerialization JSONObjectWithData:data options:kNilOptions error:NULL];
     [command setObject:[NSMutableDictionary dictionaryWithDictionary:json] forKey:@"where"];
     [command setObject:self.convMessage.sort forKey:@"sort"];
@@ -451,7 +475,7 @@ static uint16_t _searial_id = 0;
 }
 
 - (NSString *)avim_messageClass {
-    LCIMMessage *command = [self avim_messageCommand];
+    AVIMMessage *command = [self avim_messageCommand];
     Class class = [command class];
     NSString *avim_messageClass = NSStringFromClass(class);
     return avim_messageClass;

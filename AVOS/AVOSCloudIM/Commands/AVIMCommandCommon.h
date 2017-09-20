@@ -6,6 +6,6 @@
 //  Copyright (c) 2014 LeanCloud Inc. All rights reserved.
 //
 
-#import "MessagesProtoOrig.pbobjc.h"
+#import "MessagesProtoOrig.pb.h"
 #import "AVIMGenericCommand+AVIMMessagesAdditions.h"
 #import "AVIMCommandFormatter.h"

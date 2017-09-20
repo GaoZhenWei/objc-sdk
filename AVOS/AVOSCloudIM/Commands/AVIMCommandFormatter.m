@@ -18,59 +18,59 @@ const NSInteger LCIMErrorCodeSessionTokenExpired = 4112;
 + (NSString *)commandType:(AVIMCommandType)commandType {
     NSString *commandTypeString;
     switch (commandType) {
-        case AVIMCommandType_Session:
+        case AVIMCommandTypeSession:
             commandTypeString = @"Session";
             break;
             
-        case AVIMCommandType_Conv:
+        case AVIMCommandTypeConv:
             commandTypeString = @"Conv";
             break;
             
-        case AVIMCommandType_Direct:
+        case AVIMCommandTypeDirect:
             commandTypeString = @"Direc";
             break;
             
-        case AVIMCommandType_Ack:
+        case AVIMCommandTypeAck:
             commandTypeString = @"Ack";
             break;
             
-        case AVIMCommandType_Rcp:
+        case AVIMCommandTypeRcp:
             commandTypeString = @"Rcp";
             break;
             
-        case AVIMCommandType_Unread:
+        case AVIMCommandTypeUnread:
             commandTypeString = @"Unread";
             break;
             
-        case AVIMCommandType_Logs:
+        case AVIMCommandTypeLogs:
             commandTypeString = @"Logs";
             break;
             
-        case AVIMCommandType_Error:
+        case AVIMCommandTypeError:
             commandTypeString = @"Error";
             break;
             
-        case AVIMCommandType_Login:
+        case AVIMCommandTypeLogin:
             commandTypeString = @"Login";
             break;
             
-        case AVIMCommandType_Data:
+        case AVIMCommandTypeData:
             commandTypeString = @"Data";
             break;
             
-        case AVIMCommandType_Room:
+        case AVIMCommandTypeRoom:
             commandTypeString = @"Room";
             break;
             
-        case AVIMCommandType_Read:
+        case AVIMCommandTypeRead:
             commandTypeString = @"Read";
             break;
             
-        case AVIMCommandType_Presence:
+        case AVIMCommandTypePresence:
             commandTypeString = @"Presence";
             break;
             
-        case AVIMCommandType_Report:
+        case AVIMCommandTypeReport:
             commandTypeString = @"Report";
             break;
     }
@@ -83,24 +83,24 @@ const NSInteger LCIMErrorCodeSessionTokenExpired = 4112;
     switch (action) {
             
             // AVIMOpType_Add = 2,
-        case AVIMOpType_Add:
+        case AVIMOpTypeAdd:
             actionStr = @"invite";
             break;
             
             // AVIMOpType_Remove = 3,
-        case AVIMOpType_Remove:
+        case AVIMOpTypeRemove:
             actionStr = @"kick";
             break;
             
             // AVIMOpType_Open = 1,
             // 登陆
-        case AVIMOpType_Open:
+        case AVIMOpTypeOpen:
             actionStr = @"open";
             break;
             
             // AVIMOpType_Start = 30,
             // 创建对话
-        case AVIMOpType_Start:
+        case AVIMOpTypeStart:
             actionStr = @"start";
             break;
             
@@ -120,8 +120,9 @@ const NSInteger LCIMErrorCodeSessionTokenExpired = 4112;
 
         if ([jsonData length]) {
             NSString *jsonString = [[NSString alloc] initWithData:jsonData encoding:NSUTF8StringEncoding];
-            jsonObjectMesssage = [[AVIMJsonObjectMessage alloc] init];
-            jsonObjectMesssage.data_p = jsonString;
+            AVIMJsonObjectMessageBuilder *jsonObjectMesssageBuilder = [AVIMJsonObjectMessage builder];
+            jsonObjectMesssageBuilder.data = jsonString;
+            jsonObjectMesssage = [jsonObjectMesssageBuilder build];
         } else if (error) {
             AVLoggerError(AVLoggerDomainIM, @"Can not stringify dictionary: %@.", error.localizedDescription);
         } else {
@@ -133,7 +134,7 @@ const NSInteger LCIMErrorCodeSessionTokenExpired = 4112;
 }
 
 + (NSData *)dataWithJSONObject:(AVIMJsonObjectMessage *)JSONObject {
-    NSData *data = [JSONObject.data_p dataUsingEncoding:NSUTF8StringEncoding];
+    NSData *data = [JSONObject.data dataUsingEncoding:NSUTF8StringEncoding];
     return data;
 }
 

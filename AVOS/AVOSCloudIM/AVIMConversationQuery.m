@@ -7,7 +7,7 @@
 //
 
 #import "AVIMConversationQuery.h"
-#import "MessagesProtoOrig.pbobjc.h"
+#import "MessagesProtoOrig.pb.h"
 #import "AVIMCommandCommon.h"
 #import "AVUtils.h"
 #import "AVIMConversation.h"
@@ -336,30 +336,31 @@ NSString *const kAVIMKeyConversationId = @"objectId";
 }
 
 - (AVIMGenericCommand *)queryCommand {
-    AVIMGenericCommand *genericCommand = [[AVIMGenericCommand alloc] init];
-    genericCommand.needResponse = YES;
-    genericCommand.cmd = AVIMCommandType_Conv;
-    genericCommand.peerId = self.client.clientId;
-    genericCommand.op = AVIMOpType_Query;
+    AVIMGenericCommandBuilder *genericCommandBuilder = [AVIMGenericCommand builder];
+    genericCommandBuilder.cmd = AVIMCommandTypeConv;
+    genericCommandBuilder.peerId = self.client.clientId;
+    genericCommandBuilder.op = AVIMOpTypeQuery;
     
-    AVIMConvCommand *command = [[AVIMConvCommand alloc] init];
-    AVIMJsonObjectMessage *jsonObjectMessage = [[AVIMJsonObjectMessage alloc] init];
-    jsonObjectMessage.data_p = [self whereString];
-    command.where = jsonObjectMessage;
-    command.sort = self.order;
-    command.flag = self.option;
+    AVIMConvCommandBuilder *commandBuilder = [AVIMConvCommand builder];
+    AVIMJsonObjectMessageBuilder *jsonObjectMessageBuilder = [AVIMJsonObjectMessage builder];
+    jsonObjectMessageBuilder.data = [self whereString];
+    commandBuilder.where = [jsonObjectMessageBuilder build];
+    commandBuilder.sort = self.order;
+    commandBuilder.flag = self.option;
 
     if (self.skip > 0) {
-        command.skip = (uint32_t)self.skip;
+        commandBuilder.skip = (uint32_t)self.skip;
     }
 
     if (self.limit > 0) {
-        command.limit = (uint32_t)self.limit;
+        commandBuilder.limit = (uint32_t)self.limit;
     } else {
-        command.limit = 10;
+        commandBuilder.limit = 10;
     }
     
-    [genericCommand avim_addRequiredKeyWithCommand:command];
+    AVIMGenericCommand *genericCommand = [genericCommandBuilder build];
+    genericCommand = [genericCommand avim_addRequiredKeyWithCommand:(AVIMMessage *)[commandBuilder build]];
+    genericCommand.needResponse = YES;
     return genericCommand;
 }
 
@@ -387,7 +388,7 @@ NSString *const kAVIMKeyConversationId = @"objectId";
 
 
 - (NSArray *)conversationsWithResults:(AVIMJsonObjectMessage *)messages {
-    NSArray *results = [self JSONValue:messages.data_p];
+    NSArray *results = [self JSONValue:messages.data];
 
     NSMutableArray *conversations = [NSMutableArray arrayWithCapacity:[results count]];
 

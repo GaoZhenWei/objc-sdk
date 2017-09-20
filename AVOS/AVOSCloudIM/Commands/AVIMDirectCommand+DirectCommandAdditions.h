@@ -6,7 +6,7 @@
 //  Copyright © 2016年 LeanCloud Inc. All rights reserved.
 //
 
-#import "MessagesProtoOrig.pbobjc.h"
+#import "MessagesProtoOrig.pb.h"
 #import "AVIMMessage.h"
 
 @interface AVIMDirectCommand (DirectCommandAdditions)

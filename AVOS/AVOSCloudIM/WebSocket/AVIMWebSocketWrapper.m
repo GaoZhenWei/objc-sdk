@@ -594,7 +594,7 @@ SecCertificateRef LCGetCertificateFromBase64String(NSString *base64);
     BOOL needResponse = genericCommand.needResponse;
     if (_webSocket.readyState == AVIM_OPEN) {
         if (needResponse) {
-            [genericCommand avim_addOrRefreshSerialId];
+            genericCommand = [genericCommand avim_addOrRefreshSerialId];
             [self enqueueCommand:genericCommand];
             NSNumber *num = @(genericCommand.i);
             [_serialIdArray addObject:num];
@@ -660,7 +660,7 @@ SecCertificateRef LCGetCertificateFromBase64String(NSString *base64);
     _reconnectInterval = 1;
     NSError *error = nil;
     /* message for server which is in accordance with protobuf protocol must be data type, there is no need to convert string to data. */
-    AVIMGenericCommand *command = [AVIMGenericCommand parseFromData:message error:&error];
+    AVIMGenericCommand *command = [AVIMGenericCommand parseFromData:message];
     AVLoggerInfo(AVLoggerDomainIM, LCIM_IN_COMMAND_LOG_FORMAT, [command avim_description]);
 
     if (!command) {
