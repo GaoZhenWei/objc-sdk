@@ -594,7 +594,9 @@ SecCertificateRef LCGetCertificateFromBase64String(NSString *base64);
     BOOL needResponse = genericCommand.needResponse;
     if (_webSocket.readyState == AVIM_OPEN) {
         if (needResponse) {
+            AVIMCommandResultBlock callback = genericCommand.callback;
             genericCommand = [genericCommand avim_addOrRefreshSerialId];
+            [genericCommand setCallback:callback];
             [self enqueueCommand:genericCommand];
             NSNumber *num = @(genericCommand.i);
             [_serialIdArray addObject:num];

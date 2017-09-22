@@ -345,7 +345,9 @@ NSString *const kAVIMKeyConversationId = @"objectId";
     AVIMJsonObjectMessageBuilder *jsonObjectMessageBuilder = [AVIMJsonObjectMessage builder];
     jsonObjectMessageBuilder.data = [self whereString];
     commandBuilder.where = [jsonObjectMessageBuilder build];
-    commandBuilder.sort = self.order;
+    if (self.order) {
+        commandBuilder.sort = self.order;
+    }
     commandBuilder.flag = self.option;
 
     if (self.skip > 0) {

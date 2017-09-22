@@ -1243,6 +1243,9 @@ static dispatch_queue_t messageCacheOperationQueue;
     AVIMLogsCommand *logsOutCommand = genericCommand.logsMessage;
     __block AVIMGenericCommand *genericCommand2 = genericCommand;
     dispatch_async([AVIMClient imClientQueue], ^{
+        BOOL needResoponse = genericCommand2.needResponse;
+        genericCommand2 = [genericCommand2 avim_addRequiredKeyWithCommand:(AVIMMessage *)logsOutCommand];
+        genericCommand2.needResponse = needResoponse;
         [genericCommand2 setCallback:^(AVIMGenericCommand *outCommand, AVIMGenericCommand *inCommand, NSError *error) {
             if (!error) {
                 AVIMLogsCommand *logsInCommand = inCommand.logsMessage;
@@ -1284,7 +1287,6 @@ static dispatch_queue_t messageCacheOperationQueue;
                 [AVIMBlockHelper callArrayResultBlock:callback array:nil error:error];
             }
         }];
-        genericCommand2 = [genericCommand2 avim_addRequiredKeyWithCommand:(AVIMMessage *)logsOutCommand];
         [_imClient sendCommand:genericCommand2];
     });
 }

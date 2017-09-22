@@ -447,7 +447,8 @@ static BOOL AVIMClientHasInstantiated = NO;
     genericCommandBuilder.op = AVIMOpTypeOpen;
     genericCommandBuilder.appId = appId;
     genericCommandBuilder.peerId = clientId ?: _clientId;
-
+    
+    NSString *origTag = tag;
     AVIMSessionCommandBuilder *sessionCommandBuilder = [AVIMSessionCommand builder];
     NSString *sessionToken = [[LCIMClientSessionTokenCacheStore sharedInstance] sessionTokenForClientId:clientId tag:tag];
 
@@ -470,7 +471,6 @@ static BOOL AVIMClientHasInstantiated = NO;
     genericCommandBuilder.sessionMessage = [sessionCommandBuilder build];
     
     AVIMGenericCommand *genericCommand = [genericCommandBuilder build];
-    NSString *origTag = tag;
     genericCommand.needResponse = YES;
     objc_setAssociatedObject(genericCommand, @selector(tag), origTag, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     objc_setAssociatedObject(genericCommand, @selector(force), @(force), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
@@ -485,6 +485,7 @@ static BOOL AVIMClientHasInstantiated = NO;
         AVLoggerError(AVLoggerDomainIM, @"Command not found, can not open client.");
         return;
     }
+    AVIMCommandResultBlock callback = command.callback;
     AVIMGenericCommandBuilder *genericCommandBuilder = [AVIMGenericCommand builderWithPrototype:command];
     AVIMSessionCommandBuilder *sessionCommandBuilder = [AVIMSessionCommand builderWithPrototype:genericCommandBuilder.sessionMessage];
 
@@ -503,8 +504,6 @@ static BOOL AVIMClientHasInstantiated = NO;
         AVLoggerError(AVLoggerDomainIM, @"Signature error, can not open client.");
         return;
     }
-    /* NOTE: this will trigger an action that `command.sessionMessage.st = nil;` */
-    command = [command avim_addRequiredKeyForSessionMessageWithSignature:signature];
 
     /* By default, we make non-initiative connection. */
     BOOL force = NO;
@@ -536,8 +535,13 @@ static BOOL AVIMClientHasInstantiated = NO;
 
     OSAtomicIncrement32(&_openTimes);
     genericCommandBuilder.sessionMessage = [sessionCommandBuilder build];
-
-    [self sendCommand:[genericCommandBuilder build]];
+    
+    AVIMGenericCommand *genericCommand = [genericCommandBuilder build];
+    /* NOTE: this will trigger an action that `command.sessionMessage.st = nil;` */
+    genericCommand = [genericCommand avim_addRequiredKeyForSessionMessageWithSignature:signature];
+    [genericCommand setCallback:callback];
+    
+    [self sendCommand:genericCommand];
 }
 
 - (void)registerPushChannelInBackground {
@@ -836,21 +840,21 @@ static BOOL AVIMClientHasInstantiated = NO;
         genericCommandBuilder.peerId = _clientId;
         
         AVIMGenericCommand *genericCommand = [genericCommandBuilder build];
-        [genericCommand setCallback:^(AVIMGenericCommand *outCommand, AVIMGenericCommand *inCommand, NSError *error) {
-            if (!error) {
-                AVIMSessionCommand *sessionMessage = inCommand.sessionMessage;
-                NSArray *onlineClients = sessionMessage.onlineSessionPeerIds ?: @[];
-
-                [AVIMBlockHelper callArrayResultBlock:callback array:onlineClients error:nil];
-            } else {
-                [AVIMBlockHelper callArrayResultBlock:callback array:@[] error:error];
-            }
-        }];
 
         AVIMSessionCommandBuilder *sessionCommandBuilder = [AVIMSessionCommand builder];
         sessionCommandBuilder.sessionPeerIdsArray = clients ?: @[];
 
         genericCommand = [genericCommand avim_addRequiredKeyWithCommand:(AVIMMessage *)[sessionCommandBuilder build]];
+        [genericCommand setCallback:^(AVIMGenericCommand *outCommand, AVIMGenericCommand *inCommand, NSError *error) {
+            if (!error) {
+                AVIMSessionCommand *sessionMessage = inCommand.sessionMessage;
+                NSArray *onlineClients = sessionMessage.onlineSessionPeerIds ?: @[];
+                
+                [AVIMBlockHelper callArrayResultBlock:callback array:onlineClients error:nil];
+            } else {
+                [AVIMBlockHelper callArrayResultBlock:callback array:@[] error:error];
+            }
+        }];
         genericCommand.needResponse = YES;
         [self sendCommand:genericCommand];
     });
